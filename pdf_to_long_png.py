@@ -95,8 +95,7 @@ def _draw_text_with_fallback(draw, x, y, text, font_ko, font_cjk, fill):
     for ch in text:
         font = font_cjk if is_cjk_char(ch) else font_ko
         draw.text((cursor_x, y), ch, fill=fill, font=font)
-        bbox = font.getbbox(ch)
-        cursor_x += bbox[2] - bbox[0]
+        cursor_x += font.getlength(ch)
 
 
 def _measure_text_width(text, font_ko, font_cjk):
@@ -104,8 +103,7 @@ def _measure_text_width(text, font_ko, font_cjk):
     width = 0
     for ch in text:
         font = font_cjk if is_cjk_char(ch) else font_ko
-        bbox = font.getbbox(ch)
-        width += bbox[2] - bbox[0]
+        width += font.getlength(ch)
     return width
 
 
@@ -120,8 +118,7 @@ def _wrap_text_pixel(text, max_width, font_ko, font_cjk):
         current_width = 0
         for ch in paragraph:
             font = font_cjk if is_cjk_char(ch) else font_ko
-            bbox = font.getbbox(ch)
-            ch_width = bbox[2] - bbox[0]
+            ch_width = font.getlength(ch)
             if current_width + ch_width > max_width and current_line:
                 lines.append(current_line)
                 current_line = ch
@@ -150,15 +147,16 @@ def mvle_to_long_png(mvle_path, output_path):
     novel_title = data.get("novel", {}).get("title", "")
     print(f"MVLE opened: {mvle_path} ({len(blocks)} blocks, novel: {novel_title}, episode: {title})")
 
-    # --- Rendering settings ---
-    img_width = 1200
-    padding_left = 60
-    padding_right = 60
-    padding_top = 80
+    # --- Rendering settings (2x supersampling for crisp Korean glyphs) ---
+    scale = 2
+    img_width = 1200 * scale
+    padding_left = 60 * scale
+    padding_right = 60 * scale
+    padding_top = 80 * scale
     text_width = img_width - padding_left - padding_right
-    font_size = 28
-    line_spacing = 16
-    block_spacing = 32
+    font_size = 28 * scale
+    line_spacing = 16 * scale
+    block_spacing = 32 * scale
 
     try:
         font_ko = ImageFont.truetype(FONT_KO_PATH, font_size)
@@ -211,6 +209,11 @@ def mvle_to_long_png(mvle_path, output_path):
         for line in lines:
             _draw_text_with_fallback(draw, padding_left, y, line, fk, fc, fill)
             y += line_height
+
+    # Downscale to original 1200px width for final output
+    final_width = img_width // scale
+    final_height = total_height // scale
+    image = image.resize((final_width, final_height), Image.LANCZOS)
 
     try:
         image.save(output_path)
